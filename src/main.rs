@@ -94,11 +94,17 @@ fn user(uuid: &str) -> String {
 // fn users(grade: u8, filters: Filters) {}
 
 #[get("/users/<name_grade>?<filters..>")]
-fn users(name_grade: NameGrade, filters: Filters) -> String {
+fn users(name_grade: NameGrade, filters: Option<Filters>) -> String {
     let users: Vec<&User> = USERS
         .values()
         .filter(|user| user.name.contains(&name_grade.name) && user.grade == name_grade.grade)
-        .filter(|user| user.age == filters.age && user.active == filters.active)
+        .filter(|user| {
+            if let Some(fts) = &filters {
+                user.age == fts.age && user.active == fts.active
+            } else {
+                true
+            }
+        })
         .collect();
     if users.len() > 0 {
         users
