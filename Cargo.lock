@@ -945,6 +945,7 @@ dependencies = [
 name = "rocket_route_app"
 version = "0.1.0"
 dependencies = [
+ "lazy_static",
  "rocket",
 ]
 
