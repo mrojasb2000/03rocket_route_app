@@ -2,8 +2,12 @@
 extern crate rocket;
 
 use lazy_static::lazy_static;
-use rocket::{request::FromParam, Build, Rocket};
+use rocket::http::ContentType;
+use rocket::response::{self, Responder, Response};
+use rocket::{request::FromParam, Request};
+use rocket::{Build, Rocket};
 use std::collections::HashMap;
+use std::io::Cursor;
 use std::vec::Vec;
 
 #[derive(FromForm)]
@@ -44,6 +48,35 @@ struct User {
     active: bool,
 }
 
+impl<'r> Responder<'r, 'r> for &'r User {
+    fn respond_to(self, _: &'r Request<'_>) -> response::Result<'r> {
+        let user = format!("Found user: {:?}", self);
+        Response::build()
+            .sized_body(user.len(), Cursor::new(user))
+            .raw_header("X-USER-ID", self.uuid.to_string())
+            .header(ContentType::Plain)
+            .ok()
+    }
+}
+
+// newtype definition
+struct NewUser<'a>(Vec<&'a User>);
+
+impl<'r> Responder<'r, 'r> for NewUser<'r> {
+    fn respond_to(self, _: &'r Request<'_>) -> response::Result<'r> {
+        let user = self
+            .0
+            .iter()
+            .map(|u| format!("{:?}", u))
+            .collect::<Vec<String>>()
+            .join(",");
+        Response::build()
+            .sized_body(user.len(), Cursor::new(user))
+            .header(ContentType::Plain)
+            .ok()
+    }
+}
+
 lazy_static! {
     static ref USERS: HashMap<&'static str, User> = {
         let mut map = HashMap::new();
@@ -82,11 +115,11 @@ lazy_static! {
 }
 
 #[get("/user/<uuid>", rank = 1, format = "text/plain")]
-fn user(uuid: &str) -> String {
+fn user(uuid: &str) -> Option<&User> {
     let user = USERS.get(uuid);
     match user {
-        Some(u) => format!("Found user: {:?}", u),
-        None => String::from("User not found"),
+        Some(u) => Some(u),
+        None => None,
     }
 }
 
@@ -94,7 +127,7 @@ fn user(uuid: &str) -> String {
 // fn users(grade: u8, filters: Filters) {}
 
 #[get("/users/<name_grade>?<filters..>")]
-fn users(name_grade: NameGrade, filters: Option<Filters>) -> String {
+fn users(name_grade: NameGrade, filters: Option<Filters>) -> Option<NewUser> {
     let users: Vec<&User> = USERS
         .values()
         .filter(|user| user.name.contains(&name_grade.name) && user.grade == name_grade.grade)
@@ -107,13 +140,9 @@ fn users(name_grade: NameGrade, filters: Option<Filters>) -> String {
         })
         .collect();
     if users.len() > 0 {
-        users
-            .iter()
-            .map(|u| u.name.to_string())
-            .collect::<Vec<String>>()
-            .join(", ")
+        Some(NewUser(users))
     } else {
-        String::from("No users found")
+        None
     }
 }
 
