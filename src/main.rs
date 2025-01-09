@@ -2,7 +2,8 @@
 extern crate rocket;
 
 use lazy_static::lazy_static;
-use rocket::http::ContentType;
+use rocket::http::{ContentType, Status};
+use rocket::response::status;
 use rocket::response::{self, Responder, Response};
 use rocket::{request::FromParam, Request};
 use rocket::{Build, Rocket};
@@ -115,12 +116,14 @@ lazy_static! {
 }
 
 #[get("/user/<uuid>", rank = 1, format = "text/plain")]
-fn user(uuid: &str) -> Option<&User> {
+fn user(uuid: &str) -> status::Custom<&User> {
     let user = USERS.get(uuid);
-    match user {
-        Some(u) => Some(u),
-        None => None,
-    }
+    //match user {
+    //    Some(u) => Some(u),
+    //    None => None,
+    //}
+    //status::Accepted(user.unwrap())
+    status::Custom(Status::PreconditionFailed, user.unwrap())
 }
 
 // #[route(GET, uri = "/users/<grade>?<filters..>")]
