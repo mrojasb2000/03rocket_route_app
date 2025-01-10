@@ -2,8 +2,7 @@
 extern crate rocket;
 
 use lazy_static::lazy_static;
-use rocket::http::{ContentType, Status};
-use rocket::response::status;
+use rocket::http::ContentType;
 use rocket::response::{self, Responder, Response};
 use rocket::{request::FromParam, Request};
 use rocket::{Build, Rocket};
@@ -49,13 +48,21 @@ struct User {
     active: bool,
 }
 
+fn default_response<'r>() -> response::Response<'r> {
+    Response::build()
+        .header(ContentType::Plain)
+        .raw_header("X-CUSTOM-ID", "CUSTOM")
+        .finalize()
+}
+
 impl<'r> Responder<'r, 'r> for &'r User {
     fn respond_to(self, _: &'r Request<'_>) -> response::Result<'r> {
+        let base_response = default_response();
         let user = format!("Found user: {:?}", self);
         Response::build()
             .sized_body(user.len(), Cursor::new(user))
             .raw_header("X-USER-ID", self.uuid.to_string())
-            .header(ContentType::Plain)
+            .merge(base_response)
             .ok()
     }
 }
@@ -65,6 +72,7 @@ struct NewUser<'a>(Vec<&'a User>);
 
 impl<'r> Responder<'r, 'r> for NewUser<'r> {
     fn respond_to(self, _: &'r Request<'_>) -> response::Result<'r> {
+        let base_response = default_response();
         let user = self
             .0
             .iter()
@@ -73,7 +81,8 @@ impl<'r> Responder<'r, 'r> for NewUser<'r> {
             .join(",");
         Response::build()
             .sized_body(user.len(), Cursor::new(user))
-            .header(ContentType::Plain)
+            .raw_header("X-CUSTOM-ID", "USERS")
+            .join(base_response)
             .ok()
     }
 }
@@ -116,14 +125,12 @@ lazy_static! {
 }
 
 #[get("/user/<uuid>", rank = 1, format = "text/plain")]
-fn user(uuid: &str) -> status::Custom<&User> {
+fn user(uuid: &str) -> Option<&User> {
     let user = USERS.get(uuid);
-    //match user {
-    //    Some(u) => Some(u),
-    //    None => None,
-    //}
-    //status::Accepted(user.unwrap())
-    status::Custom(Status::PreconditionFailed, user.unwrap())
+    match user {
+        Some(u) => Some(u),
+        None => None,
+    }
 }
 
 // #[route(GET, uri = "/users/<grade>?<filters..>")]
